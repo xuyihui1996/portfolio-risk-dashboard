@@ -5,6 +5,7 @@ import numpy as np
 import yfinance as yf
 import matplotlib.pyplot as plt
 import seaborn as sns
+import textwrap
 from datetime import datetime
 
 # Set up plotting style
@@ -333,12 +334,26 @@ def main():
         "• Note: Fixed illustrative stock basket; results may reflect survivorship/selection bias."
     ]
     
-    text_content = "\n\n".join(takeaways_list)
+    # Manual wrapping for better control
+    # Estimate width: A4 landscape half width approx 5 inches. 9pt font. ~50-60 chars.
+    # We use aggressive wrapping (width=50) to ensure no cutoff.
+    formatted_lines = []
     
-    # Use top alignment to avoid clashing with the title
-    ax4.text(0.0, 1.0, text_content, fontsize=9, va='top', wrap=True)
-    # Move title up slightly or rely on default
-    ax4.set_title("Executive Summary", fontsize=11, fontweight='bold', y=1.05)
+    # Header (No Indent)
+    formatted_lines.append(textwrap.fill(takeaways_list[0], width=60))
+    formatted_lines.append("") # Empty line gap
+    
+    # Bullets (Hanging Indent)
+    bullet_wrapper = textwrap.TextWrapper(width=60, subsequent_indent='  ')
+    for item in takeaways_list[1:]:
+        formatted_lines.append(bullet_wrapper.fill(item))
+        formatted_lines.append("") # Empty line gap between items
+    
+    text_content = "\n".join(formatted_lines)
+    
+    # Use top alignment, increased line spacing
+    ax4.text(0.0, 1.0, text_content, fontsize=9, va='top', linespacing=1.3)
+    ax4.set_title("Executive Summary", fontsize=11, fontweight='bold', y=1.02)
     
     plt.tight_layout()
     plt.savefig('Portfolio_Summary.pdf', dpi=300)
