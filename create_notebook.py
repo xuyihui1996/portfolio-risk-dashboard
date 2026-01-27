@@ -306,11 +306,11 @@ takeaways_list = [
 formatted_lines = []
 
 # Header (No Indent)
-formatted_lines.append(textwrap.fill(takeaways_list[0], width=60))
+formatted_lines.append(textwrap.fill(takeaways_list[0], width=80))
 formatted_lines.append("") # Empty line gap
 
 # Bullets (Hanging Indent)
-bullet_wrapper = textwrap.TextWrapper(width=60, subsequent_indent='  ')
+bullet_wrapper = textwrap.TextWrapper(width=80, subsequent_indent='  ')
 for item in takeaways_list[1:]:
     formatted_lines.append(bullet_wrapper.fill(item))
     formatted_lines.append("") # Empty line gap between items
@@ -318,7 +318,7 @@ for item in takeaways_list[1:]:
 text_content = "\\n".join(formatted_lines) # Using \n for Python newline in string
 
 # Use top alignment, increased line spacing
-ax4.text(0.0, 1.0, text_content, fontsize=9, va='top', linespacing=1.3)
+ax4.text(0.0, 1.0, text_content, fontsize=9, va='top', linespacing=1.5)
 ax4.set_title("Executive Summary", fontsize=11, fontweight='bold', y=1.02)
 
 plt.tight_layout()
