@@ -301,8 +301,9 @@ takeaways_list = [
 ]
 
 text_content = "\\n\\n".join(takeaways_list)
-ax4.text(0.0, 0.5, text_content, fontsize=9, va='center', wrap=True)
-ax4.set_title("Executive Summary", fontsize=11, fontweight='bold')
+# Use top alignment to avoid clashing with the title
+ax4.text(0.0, 1.0, text_content, fontsize=9, va='top', wrap=True)
+ax4.set_title("Executive Summary", fontsize=11, fontweight='bold', y=1.05)
 
 plt.tight_layout()
 plt.savefig('Japanese_Equity_Portfolio_Summary.pdf')
