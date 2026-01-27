@@ -14,7 +14,7 @@ Benchmark: Nikkei 225 (^N225).
 ## Objectives
 - Simulate monthly equal-weight rebalancing.
 - Calculate performance metrics (CAGR, Volatility, Sharpe Ratio, Max Drawdown).
-- Analyze top contributors/detractors.
+- Analyze top contributors/detractors (2023).
 - Visualize performance against benchmark.
 """))
 
@@ -178,8 +178,11 @@ def calculate_metrics(portfolio_series, benchmark_series):
     p_vol = p_ret.std() * np.sqrt(252)
     b_vol = b_ret.std() * np.sqrt(252)
     
-    p_sharpe = p_cagr / p_vol if p_vol != 0 else 0
-    b_sharpe = b_cagr / b_vol if b_vol != 0 else 0
+    # Sharpe (Rf=0, Arithmetic Mean / Vol)
+    p_mean = p_ret.mean() * 252
+    b_mean = b_ret.mean() * 252
+    p_sharpe = p_mean / p_vol if p_vol != 0 else 0
+    b_sharpe = b_mean / b_vol if b_vol != 0 else 0
     
     def get_dd(ts):
         peak = ts.cummax()
@@ -205,27 +208,32 @@ pd.DataFrame([
 ], index=['CAGR', 'Vol', 'Sharpe', 'Max Drawdown'], columns=['Portfolio'])
 """))
 
-# Contributors
+# Contributors (2023)
 nb.cells.append(nbf.v4.new_code_cell("""
-last_date = prices.index[-1]
-last_month_start = prices.index[prices.index.month == last_date.month][0]
-start_idx = prices.index.get_loc(last_month_start)
-end_idx = prices.index.get_loc(last_date)
+def get_contributors_2023(prices):
+    try:
+        prices_2023 = prices.loc['2023']
+        if prices_2023.empty: return {} 
+        p_start = prices_2023.iloc[0]
+        p_end = prices_2023.iloc[-1]
+        
+        contribs = {}
+        for t in TICKERS:
+            # Simple return for the year
+            ret = (p_end[t] / p_start[t]) - 1
+            # Approx Contribution = Return * Weight (0.1)
+            contribs[t] = ret * 0.1
+        return contribs
+    except KeyError:
+        return {}
 
-start_prices = prices.iloc[start_idx]
-end_prices = prices.iloc[end_idx]
-
-contribs = {}
-for t in TICKERS:
-    ret = (end_prices[t] / start_prices[t]) - 1
-    contribs[t] = ret
-
+contribs = get_contributors_2023(prices)
 sorted_contribs = sorted(contribs.items(), key=lambda x: x[1], reverse=True)
 top_contributors = sorted_contribs[:3]
 top_detractors = sorted_contribs[-3:]
 
-print("Top Contributors (Latest Month):", top_contributors)
-print("Top Detractors (Latest Month):", top_detractors)
+print("Top Contributors (2023) [pp]:", top_contributors)
+print("Top Detractors (2023) [pp]:", top_detractors)
 """))
 
 # Visualization
@@ -237,7 +245,7 @@ gs = fig.add_gridspec(3, 2, height_ratios=[2, 1.5, 1])
 # 1. Equity Curve
 ax1 = fig.add_subplot(gs[0, :])
 ax1.plot(res['Cumulative'].index, res['Cumulative'], label='Portfolio', color='#1f77b4', linewidth=2)
-ax1.plot(res['BenchmarkCumulative'].index, res['BenchmarkCumulative'], label='Benchmark (^N225)', color='#7f7f7f', linestyle='--')
+ax1.plot(res['BenchmarkCumulative'].index, res['BenchmarkCumulative'], label='Nikkei 225 (^N225)', color='#7f7f7f', linestyle='--')
 ax1.set_title("Cumulative Performance (Indexed)", fontsize=14, fontweight='bold')
 ax1.legend()
 ax1.grid(True, alpha=0.3)
@@ -269,18 +277,32 @@ ax3.set_title("Risk/Return Metrics", fontsize=12, fontweight='bold', pad=10)
 ax4 = fig.add_subplot(gs[2, 1])
 ax4.axis('off')
 
-top_c_str = ", ".join([f"{t[0]} ({t[1]:.1%})" for t in top_contributors])
-top_d_str = ", ".join([f"{t[0]} ({t[1]:.1%})" for t in top_detractors])
+top_c_str = ", ".join([f"{t[0]} ({t[1]:+.1%})" for t in top_contributors]).replace("%", "pp")
+top_d_str = ", ".join([f"{t[0]} ({t[1]:+.1%})" for t in top_detractors]).replace("%", "pp")
 
-takeaways = [
-    "• The portfolio deliveres competitive risk-adjusted returns.",
-    "• Monthly rebalancing monetizes volatility in range-bound markets.",
-    f"• Top Contributors: {top_c_str}",
-    f"• Top Detractors: {top_d_str}"
+# Metrics for text
+t_cagr = res['Metrics']['CAGR']
+b_cagr = res['Metrics']['Bench_CAGR']
+t_vol = res['Metrics']['Vol']
+b_vol = res['Metrics']['Bench_Vol']
+t_sharpe = res['Metrics']['Sharpe']
+b_sharpe = res['Metrics']['Bench_Sharpe']
+t_mdd = res['Metrics']['MDD']
+b_mdd = res['Metrics']['Bench_MDD']
+
+header_info = "Universe: 10 Japan large-caps (equal weight), monthly rebalance, 0.1% transaction cost, Adj Close, period 2018–2023."
+
+takeaways_list = [
+    header_info,
+    f"• Outperformance: Portfolio CAGR {t_cagr:.2%} vs {b_cagr:.2%} (Nikkei 225). Sharpe {t_sharpe:.2f} vs {b_sharpe:.2f} (ann. mean daily return / ann. vol).",
+    f"• Risk Profile: Volatility {t_vol:.2%} vs {b_vol:.2%}; Max Drawdown {t_mdd:.2%} vs {b_mdd:.2%}, indicating similar equity risk with better downside control.",
+    f"• Attribution (2023): Top contributors: {top_c_str}; Detractors: {top_d_str} (approx. contribution to portfolio return).",
+    "• Note: Fixed illustrative stock basket; results may reflect survivorship/selection bias."
 ]
-text_str = "\\n".join(takeaways)
-ax4.text(0, 0.5, text_str, fontsize=10, va='center', wrap=True)
-ax4.set_title("Key Takeaways", fontsize=12, fontweight='bold')
+
+text_content = "\\n\\n".join(takeaways_list)
+ax4.text(0.0, 0.5, text_content, fontsize=9, va='center', wrap=True)
+ax4.set_title("Executive Summary", fontsize=11, fontweight='bold')
 
 plt.tight_layout()
 plt.savefig('Japanese_Equity_Portfolio_Summary.pdf')

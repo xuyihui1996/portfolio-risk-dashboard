@@ -166,6 +166,7 @@ def simulate_portfolio(prices):
         
     return pd.DataFrame(portfolio_history).set_index('Date')
 
+
 # --- Analytics ---
 def calculate_metrics(portfolio_series, benchmark_series):
     # Daily Returns
@@ -191,9 +192,13 @@ def calculate_metrics(portfolio_series, benchmark_series):
     p_vol = p_ret.std() * np.sqrt(252)
     b_vol = b_ret.std() * np.sqrt(252)
     
-    # Sharpe (Rf=0)
-    p_sharpe = p_cagr / p_vol if p_vol != 0 else 0
-    b_sharpe = b_cagr / b_vol if b_vol != 0 else 0
+    # Sharpe (Rf=0, Arithmetic Mean)
+    # User requested Standard Sharpe: Mean Annualized Return / Vol
+    p_mean_ann = p_ret.mean() * 252
+    b_mean_ann = b_ret.mean() * 252
+    
+    p_sharpe = p_mean_ann / p_vol if p_vol != 0 else 0
+    b_sharpe = b_mean_ann / b_vol if b_vol != 0 else 0
     
     # Max Drawdown
     def get_dd(ts):
@@ -222,35 +227,29 @@ def calculate_metrics(portfolio_series, benchmark_series):
         }
     }
 
-def get_contributors(prices, shares_last_rebal, start_date_idx, end_date_idx):
-    # This is tricky without full history of weights. 
-    # Simplification: Calculate return of each stock over the last moth * weight at start of last month.
-    # But wait, we rebalance monthly. so "Current Month" contributors?
-    # Let's iterate stocks and calc: (Price_End - Price_Start) * Shares
-    # This gives absolute PnL contribution.
-    
-    p_start = prices.iloc[start_date_idx]
-    p_end = prices.iloc[end_date_idx]
-    
-    # Need to know shares held during that period. 
-    # We can fetch this if we stored it, or just re-simulate quickly or assume approx weights.
-    # Since we need exact Top 2-3, let's just make the simulation return weights or attribution.
-    pass 
-    # Re-writing simulation to return attribution is better, but due to time, let's approximate:
-    # "Last Month" = Dec 2023. At start of Dec 2023, weights were equal (10%).
-    # So contribution order is just Return order of the stocks in that month.
-    # Valid? Yes, if weights are equal at start, the highest return stock contributes most.
-    
-    # Calculate returns for loop over Tickes
-    start_prices = prices.iloc[start_date_idx]
-    end_prices = prices.iloc[end_date_idx]
-    
-    contribs = {}
-    for t in TICKERS:
-        ret = (end_prices[t] / start_prices[t]) - 1
-        contribs[t] = ret # proportional to contribution since equal weight
+def get_contributors_2023(prices):
+    # Attribution for Year 2023
+    # Get subset for 2023
+    try:
+        prices_2023 = prices.loc['2023']
+        if prices_2023.empty:
+            return {}
+            
+        p_start = prices_2023.iloc[0]
+        p_end = prices_2023.iloc[-1]
         
-    return contribs
+        contribs = {}
+        for t in TICKERS:
+            # Simple return for the year
+            # Approximate contribution: Weight (10%) * Asset Return
+            # This is a simplified attribution.
+            ret = (p_end[t] / p_start[t]) - 1
+            contrib = ret * 0.10
+            contribs[t] = contrib
+            
+        return contribs
+    except KeyError:
+        return {}
 
 # --- Main Execution ---
 def main():
@@ -258,24 +257,13 @@ def main():
     
     sim_df = simulate_portfolio(prices)
     
-    # Add Initial capital normalization (Starts at 10M)
-    # Return series needs to handle the drop from 10M to next day
-    
     res = calculate_metrics(sim_df['PortfolioValue'], benchmark)
     
-    # Attribution (Last Month)
-    # Find index of start of last month
-    last_date = prices.index[-1]
-    last_month_start = prices.index[prices.index.month == last_date.month][0]
-    
-    start_idx = prices.index.get_loc(last_month_start)
-    end_idx = prices.index.get_loc(last_date)
-    
-    contribs = get_contributors(prices, None, start_idx, end_idx) 
-    # Sorted
+    # Attribution (2023)
+    contribs = get_contributors_2023(prices)
     sorted_contribs = sorted(contribs.items(), key=lambda x: x[1], reverse=True)
     top_contributors = sorted_contribs[:3]
-    top_detractors = sorted_contribs[-3:]
+    top_detractors = sorted_contribs[-3:] # Lowest returns (negative)
     
     # --- Visualization / One Pager ---
     fig = plt.figure(figsize=(11.69, 8.27)) # A4 Landscape approx
@@ -284,7 +272,8 @@ def main():
     # 1. Equity Curve
     ax1 = fig.add_subplot(gs[0, :])
     ax1.plot(res['Cumulative'].index, res['Cumulative'], label='Portfolio', color='#1f77b4', linewidth=2)
-    ax1.plot(res['BenchmarkCumulative'].index, res['BenchmarkCumulative'], label='Benchmark (TOPIX)', color='#7f7f7f', linestyle='--')
+    # Updated Label
+    ax1.plot(res['BenchmarkCumulative'].index, res['BenchmarkCumulative'], label='Nikkei 225 (^N225)', color='#7f7f7f', linestyle='--')
     ax1.set_title("Cumulative Performance (Indexed)", fontsize=14, fontweight='bold')
     ax1.legend()
     ax1.grid(True, alpha=0.3)
@@ -318,21 +307,36 @@ def main():
     ax4 = fig.add_subplot(gs[2, 1])
     ax4.axis('off')
     
-    # Get text
-    top_c_str = ", ".join([f"{t[0]} ({t[1]:.1%})" for t in top_contributors])
-    top_d_str = ", ".join([f"{t[0]} ({t[1]:.1%})" for t in top_detractors])  # Detractors actually displayed
-    # top_d_str for detractors - need to reverse sort? sorted_contribs[-3:] gives lowest returns.
+    # Get text arrays
+    top_c_str = ", ".join([f"{t[0]} ({t[1]:+.1%})" for t in top_contributors]).replace("%", "pp")
+    top_d_str = ", ".join([f"{t[0]} ({t[1]:+.1%})" for t in top_detractors]).replace("%", "pp")
     
-    takeaways = [
-        "• The portfolio delivered solid risk-adjusted returns compared to the benchmark.",
-        "• Monthly equal-weight rebalancing helped monetize volatility systematically.",
-        f"• Top Contributors (Latest Month): {top_c_str}",
-        f"• Top Detractors (Latest Month): {top_d_str}"
+    # Updated Takeaways (PM Style)
+    t_cagr = res['Metrics']['CAGR']
+    b_cagr = res['Metrics']['Bench_CAGR']
+    t_vol = res['Metrics']['Vol']
+    b_vol = res['Metrics']['Bench_Vol']
+    t_sharpe = res['Metrics']['Sharpe']
+    b_sharpe = res['Metrics']['Bench_Sharpe']
+    t_mdd = res['Metrics']['MDD']
+    b_mdd = res['Metrics']['Bench_MDD']
+
+    # Header Line
+    header_info = "Universe: 10 Japan large-caps (equal weight), monthly rebalance, 0.1% transaction cost, Adj Close, period 2018–2023."
+
+    # Takeaways list
+    takeaways_list = [
+        header_info,
+        f"• Outperformance: Portfolio CAGR {t_cagr:.2%} vs {b_cagr:.2%} (Nikkei 225). Sharpe {t_sharpe:.2f} vs {b_sharpe:.2f} (ann. mean daily return / ann. vol).",
+        f"• Risk Profile: Volatility {t_vol:.2%} vs {b_vol:.2%}; Max Drawdown {t_mdd:.2%} vs {b_mdd:.2%}, indicating similar equity risk with better downside control.",
+        f"• Attribution (2023): Top contributors: {top_c_str}; Detractors: {top_d_str} (approx. contribution to portfolio return).",
+        "• Note: Fixed illustrative stock basket; results may reflect survivorship/selection bias."
     ]
     
-    text_str = "\n".join(takeaways)
-    ax4.text(0, 0.5, text_str, fontsize=10, va='center', wrap=True)
-    ax4.set_title("Key Takeaways", fontsize=12, fontweight='bold')
+    text_content = "\n\n".join(takeaways_list)
+    
+    ax4.text(0.0, 0.5, text_content, fontsize=9, va='center', wrap=True)
+    ax4.set_title("Executive Summary", fontsize=11, fontweight='bold')
     
     plt.tight_layout()
     plt.savefig('Portfolio_Summary.pdf', dpi=300)
