@@ -264,7 +264,15 @@ def main():
     contribs = get_contributors_2023(prices)
     sorted_contribs = sorted(contribs.items(), key=lambda x: x[1], reverse=True)
     top_contributors = sorted_contribs[:3]
-    top_detractors = sorted_contribs[-3:] # Lowest returns (negative)
+    bottom_performers = sorted_contribs[-3:]
+    
+    # Determine label for bottom performers
+    # If the worst performer is positive, then all are positive -> "Smallest Contributors"
+    # If the worst is negative, we call them "Detractors" (or mixed)
+    if bottom_performers[-1][1] < 0:
+        detractor_label = "Detractors"
+    else:
+        detractor_label = "Smallest Contributors"
     
     # --- Visualization / One Pager ---
     fig = plt.figure(figsize=(11.69, 8.27)) # A4 Landscape approx
@@ -308,9 +316,8 @@ def main():
     ax4 = fig.add_subplot(gs[2, 1])
     ax4.axis('off')
     
-    # Get text arrays
     top_c_str = ", ".join([f"{t[0]} ({t[1]:+.1%})" for t in top_contributors]).replace("%", "pp")
-    top_d_str = ", ".join([f"{t[0]} ({t[1]:+.1%})" for t in top_detractors]).replace("%", "pp")
+    bottom_str = ", ".join([f"{t[0]} ({t[1]:+.1%})" for t in bottom_performers]).replace("%", "pp")
     
     # Updated Takeaways (PM Style)
     t_cagr = res['Metrics']['CAGR']
@@ -323,14 +330,14 @@ def main():
     b_mdd = res['Metrics']['Bench_MDD']
 
     # Header Line
-    header_info = "Universe: 10 Japan large-caps (equal weight), monthly rebalance, 0.1% transaction cost, Adj Close, period 2018–2023."
+    header_info = "Universe: 10 Japan large-caps (equal weight) incl. 1321.T (Nikkei ETF), monthly rebalance, 0.1% cost, Adj Close, 2018–2023."
 
     # Takeaways list
     takeaways_list = [
         header_info,
         f"• Outperformance: Portfolio CAGR {t_cagr:.2%} vs {b_cagr:.2%} (Nikkei 225). Sharpe {t_sharpe:.2f} vs {b_sharpe:.2f} (ann. mean daily return / ann. vol).",
         f"• Risk Profile: Volatility {t_vol:.2%} vs {b_vol:.2%}; Max Drawdown {t_mdd:.2%} vs {b_mdd:.2%}, indicating similar equity risk with better downside control.",
-        f"• Attribution (2023): Top contributors: {top_c_str}; Detractors: {top_d_str} (approx. contribution to portfolio return).",
+        f"• Attribution (2023): Top contributors: {top_c_str}; {detractor_label}: {bottom_str} (approx.: start-of-period equal weight x asset simple return; ignores intra-year weight drift and transaction costs).",
         "• Note: Fixed illustrative stock basket; results may reflect survivorship/selection bias."
     ]
     
