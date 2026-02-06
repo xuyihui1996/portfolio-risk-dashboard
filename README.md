@@ -3,6 +3,10 @@
 ## Overview
 This project simulates and analyzes an equal-weight Japanese equity portfolio comprising 10 major stocks and benchmarks against the Nikkei 225 index. It demonstrates portfolio construction, monthly rebalancing, performance metric calculation, and reporting using Python.
 
+## Demo
+- [View One-Page Portfolio Summary (PDF)](./Portfolio_Summary.pdf)
+- [View Analysis Notebook](./Japanese_Equity_Portfolio_Analysis.ipynb)
+
 ## Project Structure
 ```
 .
